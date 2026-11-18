@@ -92,7 +92,25 @@ function extractAudioFromResponse(response) {
   return null;
 }
 
-const MODEL_CHAIN = ['gemini-3.8-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+const MODEL_CHAIN = [
+  'gemini-3.5-flash',
+  'gemini-3.6-flash',
+  'gemini-3.8-flash',
+  'gemini-flash-latest',
+  'gemini-flash-lite-latest',
+];
+
+function isTransientError(err) {
+  const msg = String(err?.message || '');
+  return (
+    msg.includes('503') ||
+    msg.includes('429') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('high demand') ||
+    msg.includes('fetch failed') ||
+    msg.includes('Timeout')
+  );
+}
 
 async function generateWithFallback(ai, params) {
   let lastErr;
@@ -100,13 +118,12 @@ async function generateWithFallback(ai, params) {
     try {
       const reqPromise = ai.models.generateContent({ model, ...params });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`503 Timeout on ${model}`)), 12000)
+        setTimeout(() => reject(new Error(`Timeout on ${model}`)), 10000)
       );
       return await Promise.race([reqPromise, timeoutPromise]);
     } catch (err) {
       lastErr = err;
-      const msg = String(err?.message || '');
-      if (msg.includes('503') || msg.includes('429') || msg.includes('UNAVAILABLE')) {
+      if (isTransientError(err)) {
         console.warn(`Model ${model} busy/slow, trying next fallback...`);
         continue;
       }
@@ -242,8 +259,15 @@ app.post('/api/diagnose', async (req, res) => {
     });
   } catch (err) {
     console.error('Diagnosis error:', err);
+    if (isTransientError(err)) {
+      return res.status(503).json({
+        errorCode: 'AI_BUSY',
+        error: 'Server AI sedang ramai sementara. Silakan tunggu beberapa detik lalu coba lagi.',
+      });
+    }
     return res.status(502).json({
-      error: err.message || 'Failed to analyze crop input with Gemini API.',
+      errorCode: 'AI_ERROR',
+      error: 'Maaf, analisa tanaman belum berhasil diproses. Silakan coba lagi.',
     });
   }
 });

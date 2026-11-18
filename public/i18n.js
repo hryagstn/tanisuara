@@ -83,6 +83,8 @@ export const I18N = {
     ],
     errNoInput: 'Unggah foto tanaman, pilih contoh, rekam suara, atau tulis pertanyaan lebih dulu.',
     errMic: 'Izin mikrofon ditolak atau tidak tersedia di browser ini.',
+    errBusy: 'Server AI sedang ramai sementara. Tunggu beberapa detik lalu coba analisa lagi.',
+    errGeneric: 'Maaf, analisa tanaman belum berhasil diproses. Silakan coba lagi.',
   },
   en: {
     subtitle: 'Snap a crop leaf, ask by voice, and hear practical care steps.',
@@ -168,5 +170,7 @@ export const I18N = {
     ],
     errNoInput: 'Upload a leaf photo, pick a sample, record voice, or type a question first.',
     errMic: 'Microphone access was denied or is unavailable in this browser.',
+    errBusy: 'The AI service is temporarily busy. Please wait a few seconds and try again.',
+    errGeneric: 'Sorry, we could not process the crop analysis right now. Please try again.',
   }
 };

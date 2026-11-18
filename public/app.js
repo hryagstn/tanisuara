@@ -444,7 +444,13 @@ async function runDiagnosis({ followUpText = null } = {}) {
 
     const data = await response.json();
     if (!response.ok) {
-      throw new Error(data.error || 'Request failed.');
+      const friendly =
+        data.errorCode === 'AI_BUSY'
+          ? t('errBusy')
+          : data.errorCode === 'AI_ERROR'
+            ? t('errGeneric')
+            : data.error || t('errGeneric');
+      throw new Error(friendly);
     }
 
     stopPipelineAnimation(true);
