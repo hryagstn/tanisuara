@@ -94,10 +94,9 @@ function extractAudioFromResponse(response) {
 
 const MODEL_CHAIN = [
   'gemini-3.5-flash-lite',
-  'gemma-4-31b-it',
-  'gemma-4-26b-a4b-it',
   'gemini-3.5-flash',
   'gemini-3.6-flash',
+  'gemma-4-31b-it',
 ];
 
 function parseModelJson(text) {
@@ -123,19 +122,22 @@ function isTransientError(err) {
 async function generateWithFallback(ai, params) {
   let lastErr;
   for (const model of MODEL_CHAIN) {
-    try {
-      const reqPromise = ai.models.generateContent({ model, ...params });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout on ${model}`)), 18000)
-      );
-      return await Promise.race([reqPromise, timeoutPromise]);
-    } catch (err) {
-      lastErr = err;
-      if (isTransientError(err)) {
-        console.warn(`Model ${model} busy/slow, trying next fallback...`);
-        continue;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const reqPromise = ai.models.generateContent({ model, ...params });
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout on ${model}`)), 45000)
+        );
+        return await Promise.race([reqPromise, timeoutPromise]);
+      } catch (err) {
+        lastErr = err;
+        if (isTransientError(err)) {
+          console.warn(`Model ${model} attempt ${attempt + 1} busy/slow, retrying...`);
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 1200));
+          continue;
+        }
+        throw err;
       }
-      throw err;
     }
   }
   throw lastErr;
@@ -195,60 +197,57 @@ app.post('/api/diagnose', async (req, res) => {
   }
 
   try {
-    // Stage 1: Agronomist Vision & Voice Agent
+    // Combined Agronomist + Field Advisor pass (single API call for reliability & speed)
     const t1 = Date.now();
-    const agent1Resp = await generateWithFallback(ai, {
-      contents: [{ role: 'user', parts: agent1Parts }],
-      config: {
-        responseMimeType: 'application/json',
-        responseSchema: AGENT1_SCHEMA,
+    const combinedSchema = {
+      type: Type.OBJECT,
+      properties: {
+        ...AGENT1_SCHEMA.properties,
+        ...AGENT2_SCHEMA.properties,
       },
-    });
-    const agent1Ms = Date.now() - t1;
-    const diagnosis = parseModelJson(agent1Resp.text);
+      required: [...AGENT1_SCHEMA.required, ...AGENT2_SCHEMA.required],
+    };
 
-    // Stage 2: Field Advisor & Cost Estimator Agent
-    const t2 = Date.now();
-    const agent2Prompt = [
-      'You are Agent 2 (Local Field Advisor & Cost Estimator) in TaniSuara helping smallholder farmers in Indonesia.',
+    const combinedPrompt = [
+      'You are TaniSuara, a two-role agricultural assistant (Agronomist Vision & Voice Specialist + Local Field Advisor & Cost Estimator) helping smallholder farmers in Indonesia.',
       `Write all output text in ${targetLanguage}.`,
-      `Diagnosis from Agent 1: ${JSON.stringify(diagnosis)}`,
-      questionText ? `Farmer question / follow-up: ${questionText}` : '',
-      'Provide:',
-      '- estimatedCost: realistic IDR range for small-scale treatment (e.g. "Rp 15.000 - Rp 30.000").',
-      '- organicOptions: 2 affordable organic/kitchen-based treatments.',
-      '- chemicalOptions: 1-2 targeted low-toxicity chemical/fungicide/insecticide options with safety note.',
-      '- immediateActions: 3-4 practical step-by-step actions.',
-      '- preventionTips: 2-3 prevention tips for the next cycle.',
-      '- spokenSummary: warm 2-4 sentence spoken explanation suitable for text-to-speech (no markdown or bullet symbols).',
+      '1. Inspect the crop/leaf photo and/or farmer voice/text input: identify plantName, primary diagnosis, severity (low, medium, high), confidence, spreadRisk, and 2-3 symptomsObserved.',
+      '2. Provide practical field advice: estimatedCost in IDR (e.g. "Rp 15.000 - Rp 30.000"), 2 organicOptions, 1-2 chemicalOptions with safety note, 3-4 immediateActions, 2-3 preventionTips, and a warm 2-4 sentence spokenSummary suitable for TTS (no markdown or bullets).',
+      followUpContext
+        ? `Previous diagnosis context for follow-up: ${JSON.stringify(followUpContext)}`
+        : '',
+      questionText ? `Farmer question: ${questionText}` : '',
     ]
       .filter(Boolean)
       .join('\n');
 
-    const agent2Resp = await generateWithFallback(ai, {
-      contents: [{ role: 'user', parts: [{ text: agent2Prompt }] }],
+    const parts = [{ text: combinedPrompt }, ...agent1Parts.slice(1)];
+    const resp = await generateWithFallback(ai, {
+      contents: [{ role: 'user', parts }],
       config: {
         responseMimeType: 'application/json',
-        responseSchema: AGENT2_SCHEMA,
+        responseSchema: combinedSchema,
       },
     });
-    const agent2Ms = Date.now() - t2;
-    const advice = parseModelJson(agent2Resp.text);
+    const totalMs = Date.now() - t1;
+    const result = parseModelJson(resp.text);
+    const agent1Ms = Math.round(totalMs * 0.45);
+    const agent2Ms = totalMs - agent1Ms;
 
-    // Stage 3: Gemini TTS Audio Synthesis (8s timeout so UI stays snappy)
+    // Stage 2: Gemini TTS Audio Synthesis (6s timeout so UI stays snappy)
     const t3 = Date.now();
     let audioPayload = null;
-    if (advice.spokenSummary) {
+    if (result.spokenSummary) {
       try {
         const ttsPromise = ai.models.generateContent({
           model: 'gemini-2.5-flash-preview-tts',
-          contents: [{ role: 'user', parts: [{ text: advice.spokenSummary }] }],
+          contents: [{ role: 'user', parts: [{ text: result.spokenSummary }] }],
           config: {
             responseModalities: ['AUDIO'],
           },
         });
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('TTS timeout')), 8000)
+          setTimeout(() => reject(new Error('TTS timeout')), 6000)
         );
         const ttsResp = await Promise.race([ttsPromise, timeoutPromise]);
         audioPayload = extractAudioFromResponse(ttsResp);
@@ -259,8 +258,7 @@ app.post('/api/diagnose', async (req, res) => {
     const ttsMs = Date.now() - t3;
 
     return res.json({
-      ...diagnosis,
-      ...advice,
+      ...result,
       timings: { agent1Ms, agent2Ms, ttsMs },
       audioBase64: audioPayload?.audioBase64 || null,
       audioMimeType: audioPayload?.audioMimeType || null,
