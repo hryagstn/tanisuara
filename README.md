@@ -2,6 +2,8 @@
 
 Voice-first multimodal crop disease and farming assistant in Indonesian local languages, powered by Google Gemini API.
 
+**Live Demo:** https://tanisuara-1030663088521.asia-southeast2.run.app
+
 Smallholder farmers in Indonesia often face technical English manuals when crops show early pest or disease symptoms. **TaniSuara** lets farmers snap a photo of a leaf, ask a question by voice in **Bahasa Indonesia, Basa Jawa, Basa Sunda, or English**, and hear practical, affordable care steps read aloud.
 
 ## How It Works (2-Agent Pipeline)
