@@ -1,0 +1,20 @@
+{
+  "name": "tanisuara",
+  "version": "1.0.0",
+  "description": "Multimodal voice-first crop disease & farming assistant in local Indonesian languages, powered by Gemini API.",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test test/server.test.js"
+  },
+  "dependencies": {
+    "@google/genai": "^1.0.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

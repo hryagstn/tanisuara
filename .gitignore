@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment & secrets (keep .env.example tracked)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs & runtime
+logs/
+*.log
+npm-debug.log*
+
+# Tests & coverage
+coverage/
+.nyc_output/
+
+# OS & editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
