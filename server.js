@@ -94,11 +94,19 @@ function extractAudioFromResponse(response) {
 
 const MODEL_CHAIN = [
   'gemini-3.5-flash-lite',
+  'gemma-4-31b-it',
+  'gemma-4-26b-a4b-it',
   'gemini-3.5-flash',
   'gemini-3.6-flash',
-  'gemma-4-31b-it',
-  'gemini-3.8-flash',
 ];
+
+function parseModelJson(text) {
+  const cleaned = String(text || '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '');
+  return JSON.parse(cleaned);
+}
 
 function isTransientError(err) {
   const msg = String(err?.message || '');
@@ -197,7 +205,7 @@ app.post('/api/diagnose', async (req, res) => {
       },
     });
     const agent1Ms = Date.now() - t1;
-    const diagnosis = JSON.parse(agent1Resp.text);
+    const diagnosis = parseModelJson(agent1Resp.text);
 
     // Stage 2: Field Advisor & Cost Estimator Agent
     const t2 = Date.now();
@@ -225,7 +233,7 @@ app.post('/api/diagnose', async (req, res) => {
       },
     });
     const agent2Ms = Date.now() - t2;
-    const advice = JSON.parse(agent2Resp.text);
+    const advice = parseModelJson(agent2Resp.text);
 
     // Stage 3: Gemini TTS Audio Synthesis (8s timeout so UI stays snappy)
     const t3 = Date.now();
