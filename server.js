@@ -93,11 +93,11 @@ function extractAudioFromResponse(response) {
 }
 
 const MODEL_CHAIN = [
+  'gemini-3.5-flash-lite',
   'gemini-3.5-flash',
   'gemini-3.6-flash',
-  'gemini-2.5-flash-lite',
+  'gemma-4-31b-it',
   'gemini-3.8-flash',
-  'gemini-flash-latest',
 ];
 
 function isTransientError(err) {
@@ -118,7 +118,7 @@ async function generateWithFallback(ai, params) {
     try {
       const reqPromise = ai.models.generateContent({ model, ...params });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout on ${model}`)), 25000)
+        setTimeout(() => reject(new Error(`Timeout on ${model}`)), 18000)
       );
       return await Promise.race([reqPromise, timeoutPromise]);
     } catch (err) {
