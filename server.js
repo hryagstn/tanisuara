@@ -234,25 +234,32 @@ app.post('/api/diagnose', async (req, res) => {
     const agent1Ms = Math.round(totalMs * 0.45);
     const agent2Ms = totalMs - agent1Ms;
 
-    // Stage 2: Gemini TTS Audio Synthesis (6s timeout so UI stays snappy)
+    // Stage 2: Expressive Gemini 3.8 TTS Audio Synthesis (15s timeout)
     const t3 = Date.now();
     let audioPayload = null;
     if (result.spokenSummary) {
-      try {
-        const ttsPromise = ai.models.generateContent({
-          model: 'gemini-2.5-flash-preview-tts',
-          contents: [{ role: 'user', parts: [{ text: result.spokenSummary }] }],
-          config: {
-            responseModalities: ['AUDIO'],
-          },
-        });
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('TTS timeout')), 6000)
-        );
-        const ttsResp = await Promise.race([ttsPromise, timeoutPromise]);
-        audioPayload = extractAudioFromResponse(ttsResp);
-      } catch (ttsErr) {
-        console.warn('Gemini TTS fallback triggered:', ttsErr.message);
+      const ttsModels = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts', 'gemini-2.5-flash-preview-tts'];
+      for (const ttsModel of ttsModels) {
+        try {
+          const ttsPromise = ai.models.generateContent({
+            model: ttsModel,
+            contents: [{ role: 'user', parts: [{ text: result.spokenSummary }] }],
+            config: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Aoede' } },
+              },
+            },
+          });
+          const timeoutPromise = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`TTS timeout on ${ttsModel}`)), 15000)
+          );
+          const ttsResp = await Promise.race([ttsPromise, timeoutPromise]);
+          audioPayload = extractAudioFromResponse(ttsResp);
+          if (audioPayload) break;
+        } catch (ttsErr) {
+          console.warn(`TTS ${ttsModel} fallback:`, ttsErr.message);
+        }
       }
     }
     const ttsMs = Date.now() - t3;

@@ -271,7 +271,14 @@ function speakFallback(text, langCode) {
   if (!('speechSynthesis' in window) || !text) return;
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = langCode === 'en' ? 'en-US' : 'id-ID';
+  const targetLang = langCode === 'en' ? 'en-US' : 'id-ID';
+  utterance.lang = targetLang;
+  utterance.rate = 0.96;
+  const voices = window.speechSynthesis.getVoices();
+  const preferred = voices.find(
+    (v) => v.lang.startsWith(langCode === 'en' ? 'en' : 'id') && /google|natural|damayanti/i.test(v.name)
+  );
+  if (preferred) utterance.voice = preferred;
   window.speechSynthesis.speak(utterance);
 }
 
